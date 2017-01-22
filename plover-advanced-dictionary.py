@@ -121,7 +121,9 @@ class AdvancedStenoDictionary:
 				entry = entry[:meta_divider]
 
 			# Entry meta information
+			mixin_key = entry.lower()
 			mixin_only = meta_entry.find("m") != -1
+			entry_only = meta_entry.find("e") != -1
 			# 0 - both
 			# 1 - left
 			# 2 - right
@@ -129,17 +131,26 @@ class AdvancedStenoDictionary:
 			change_side = (meta_entry.find("L") != -1) | ((meta_entry.find("R") != -1)<<1)
 
 
+			strokes_list = strokes
+			if not isinstance(strokes, list):
+				strokes_list = [strokes]
+
 			if not mixin_only:
-				self.entries[entry] = strokes
+				if not entry in self.entries:
+					self.entries[entry] = []
+				self.entries[entry] += strokes_list
 
+			if not entry_only:
+				for strokes in strokes_list:
+					mixin = StrokesMixin(strokes, change_side)
 
-			mixin = StrokesMixin(strokes, change_side)
+					if mixin_side == 0 or mixin_side == 1:
+						if not mixin_key in self.left_mixins:
+							self.left_mixins[mixin_key] = mixin
 
-			if mixin_side == 0 or mixin_side == 1:
-				self.left_mixins[entry.lower()] = mixin
-
-			if mixin_side == 0 or mixin_side == 2:
-				self.right_mixins[entry.lower()] = mixin
+					if mixin_side == 0 or mixin_side == 2:
+						if not mixin_key in self.right_mixins:
+							self.right_mixins[mixin_key] = mixin
 
 	def to_simple_strokes(self, strokes_string):
 		parts = re.findall(r"[/+\-&\^]|\^{0,1}-{0,1}(?:[A-Z][a-z]*|\"(?:[^\\\"]|(?:\\\\)*\\\")*\")", strokes_string)
@@ -190,14 +201,15 @@ class AdvancedStenoDictionary:
 	def to_simple_dictionary(self):
 		simple_dictionary = {}
 
-		for entry, strokes in self.entries.items():
-			strokes_string = ""
+		for entry, strokes_list in self.entries.items():
+			for strokes in strokes_list:
+				strokes_string = ""
 
-			for stroke in self.to_simple_strokes(strokes):
-				strokes_string += stroke.to_string() + "/"
-			strokes_string = strokes_string[:-1]
+				for stroke in self.to_simple_strokes(strokes):
+					strokes_string += stroke.to_string() + "/"
+				strokes_string = strokes_string[:-1]
 
-			simple_dictionary[strokes_string] = entry
+				simple_dictionary[strokes_string] = entry
 
 		return simple_dictionary
 

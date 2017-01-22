@@ -47,4 +47,10 @@
 
 	"brake": "BRAaK",
 	"break": "BRAaK^U",
+
+	"will": ["L", "WIL"],
+
+	"great": "GRAaT^U",
+	"great|e": "Great^W",
+	"greatly": "GreatL"
 }
