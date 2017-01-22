@@ -232,6 +232,10 @@ simple_dictionary = dictionary.to_simple_dictionary()
 
 if len(sys.argv) >= 3:
     with open(sys.argv[2], 'w') as out_file:
-        json.dump(simple_dictionary, out_file, False, True, True, True, None, 2)
+        json.dump(simple_dictionary, out_file,
+                  ensure_ascii = False, sort_keys = True,
+                  indent = 0, separators = (',', ': '))
 else:
-    print(json.dumps(simple_dictionary))
+    print(json.dumps(simple_dictionary,
+                     ensure_ascii = False, sort_keys = True,
+                     indent = 0, separators = (',', ': ')))
