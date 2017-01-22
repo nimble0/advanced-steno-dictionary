@@ -1,9 +1,50 @@
 {
+	"J|ml": "SKWR",
+	"V|ml": "SR",
+	"Z|ml": "S*",
+	"G|ml": "TKPW",
+	"N|ml": "TPH",
+	"D|ml": "TK",
+	"F|ml": "TP",
+	"X|ml": "KP",
+	"Q|ml": "KW",
+	"C|ml": "KR",
+	"B|ml": "PW",
+	"M|ml": "PH",
+	"L|ml": "HR",
+	"F|ml": "TP",
+
+	"Aa|mR": "AEU",
+	"Oo|mR": "AO",
+	"Oe|mR": "OE",
+	"Ee|mR": "AOE",
+	"Uu|mR": "AOU",
+	"I|mR": "EU",
+	"Ii|mR": "IOEU",
+	"Aw|mR": "AU",
+	"Oi|mR": "OEU",
+	"Ow|mR": "OU",
+
+	"J|mr": "-PBLG",
+	"N|mr": "-PB",
+	"M|mr": "-PL",
+	"K|mr": "-BG",
+
 	"int|ml": "SPW",
 
 	"to": "TO",
 	"want": "WAPBT",
 	"want to": "WantTo",
 
-	"interrupt": "IntRUPT"
+	"interrupt": "IntRUPT",
+
+	"forget": "FAwGT",
+	"forgettable": "Forget/-BL",
+	"unforgettable": "NForgettable",
+
+	"back": "BAK",
+	"bake": "BAaK",
+
+	"brake": "BRAaK",
+	"break": "BRAaK^U",
 }

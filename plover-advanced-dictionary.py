@@ -43,7 +43,7 @@ class Stroke:
 
 	def remove(self, stroke):
 		for i in range(0, len(stroke.keys)):
-			self.keys[i] = self.keys[i] and stroke.keys[i]
+			self.keys[i] = self.keys[i] and not stroke.keys[i]
 
 	def to_string_long(self):
 		stroke_string = ""
@@ -72,17 +72,17 @@ class Stroke:
 		return stroke_string
 
 
-
 class StrokesMixin:
 	strokes = []
-	# 0 - No change
-	# 1 - Change to left stroke
-	# 2 - Change to right stroke
-	change_stroke = 0
 
-	def __init__(self, strokes = [], change_stroke = 0):
+	# 0 - none
+	# 1 - left
+	# 2 - right
+	change_side = 0
+
+	def __init__(self, strokes = [], change_side = 0):
 		self.strokes = strokes
-		self.change_stroke = change_stroke
+		self.change_side = change_side
 
 
 class AdvancedStenoDictionary:
@@ -97,21 +97,20 @@ class AdvancedStenoDictionary:
 	def __init__(self, key_layout, entries):
 		self.key_layout = key_layout
 
+		self.left_mixins["-"] = StrokesMixin([Stroke(self.key_layout, "")], 2)
+		self.right_mixins["-"] = self.left_mixins["-"]
+		self.left_mixins["+"] = StrokesMixin([Stroke(self.key_layout, "")], 1)
+		self.right_mixins["+"] = self.left_mixins["+"]
+
 		for i in range(len(self.key_layout.keys)):
 			key = self.key_layout.keys[i]
 
 			if i < self.key_layout.break_keys[0]:
-				self.left_mixins[key.lower()] = StrokesMixin(
-					[Stroke(self.key_layout, key)],
-					0)
+				self.left_mixins[key.lower()] = StrokesMixin([Stroke(self.key_layout, key)])
 			elif i >= self.key_layout.break_keys[1]:
-				self.right_mixins[key.lower()] = StrokesMixin(
-					[Stroke(self.key_layout, "-" + key)],
-					0)
+				self.right_mixins[key.lower()] = StrokesMixin([Stroke(self.key_layout, "-" + key)])
 			else:
-				self.left_mixins[key.lower()] = StrokesMixin(
-					[Stroke(self.key_layout, key)],
-					2)
+				self.left_mixins[key.lower()] = StrokesMixin([Stroke(self.key_layout, key)], 2)
 				self.right_mixins[key.lower()] = self.left_mixins[key.lower()]
 
 		for entry, strokes in entries.items():
@@ -121,45 +120,69 @@ class AdvancedStenoDictionary:
 				meta_entry = entry[meta_divider+1:]
 				entry = entry[:meta_divider]
 
-			meta_mixin_only = meta_entry.find("m") != -1
-			meta_left_mixin = meta_entry.find("r") == -1 or meta_entry.find("l") != -1
-			meta_right_mixin = meta_entry.find("l") == -1 or meta_entry.find("r") != -1
+			# Entry meta information
+			mixin_only = meta_entry.find("m") != -1
+			# 0 - both
+			# 1 - left
+			# 2 - right
+			mixin_side = (meta_entry.find("l") != -1) | ((meta_entry.find("r") != -1)<<1)
+			change_side = (meta_entry.find("L") != -1) | ((meta_entry.find("R") != -1)<<1)
 
-			if not meta_mixin_only:
+
+			if not mixin_only:
 				self.entries[entry] = strokes
 
-			if meta_left_mixin:
-				self.left_mixins[entry.lower()] = strokes
 
-			if meta_right_mixin:
-				self.right_mixins[entry.lower()] = strokes
+			mixin = StrokesMixin(strokes, change_side)
+
+			if mixin_side == 0 or mixin_side == 1:
+				self.left_mixins[entry.lower()] = mixin
+
+			if mixin_side == 0 or mixin_side == 2:
+				self.right_mixins[entry.lower()] = mixin
 
 	def to_simple_strokes(self, strokes_string):
-		parts = re.findall(r"/|-|\^{0,1}-{0,1}(?:[A-Z][a-z]*|\"(?:[^\\\"]|(?:\\\\)*\\\")*\")", strokes_string)
+		parts = re.findall(r"[/+\-&\^]|\^{0,1}-{0,1}(?:[A-Z][a-z]*|\"(?:[^\\\"]|(?:\\\\)*\\\")*\")", strokes_string)
 
 		simple_strokes = [Stroke(self.key_layout)]
 		mixins = self.left_mixins
+		# 0 - add
+		# 1 - remove
+		combine_action = 0
 		for part in parts:
 			if part == "/":
 				simple_strokes.append(Stroke(self.key_layout))
+			elif part == "&":
+				combine_action = 0
+				mixins = self.left_mixins
+			elif part == "^":
+				combine_action = 1
+				mixins = self.left_mixins
 			else:
 				mixin = mixins[part.lower()]
 
-				if not isinstance(mixin, StrokesMixin):
-					mixins[part.lower()] = StrokesMixin(self.to_simple_strokes(mixin))
-					mixin = mixins[part.lower()]
+				if isinstance(mixin.strokes, str):
+					mixin.strokes = self.to_simple_strokes(mixin.strokes)
 
 				for stroke in mixin.strokes:
-					simple_strokes[-1].add(stroke)
+
+					if combine_action == 0:
+						simple_strokes[-1].add(stroke)
+					elif combine_action == 1:
+						simple_strokes[-1].remove(stroke)
 					simple_strokes.append(Stroke(self.key_layout))
-				simple_strokes.pop()
+				if len(mixin.strokes) > 0:
+					simple_strokes.pop()
+
+				if len(mixin.strokes) > 1:
+					combine_action = 0
 
 				if len(mixin.strokes) > 1:
 					mixins = self.left_mixins
 
-				if mixin.change_stroke == 1:
+				if mixin.change_side == 1:
 					mixins = self.left_mixins
-				elif mixin.change_stroke == 2:
+				elif mixin.change_side == 2:
 					mixins = self.right_mixins
 
 		return simple_strokes
