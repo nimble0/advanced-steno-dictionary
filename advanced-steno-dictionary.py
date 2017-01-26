@@ -153,7 +153,7 @@ class AdvancedStenoDictionary:
                             self.right_mixins[mixin_key] = mixin
 
     def to_simple_strokes(self, strokes_string):
-        parts = re.findall(r"[/+\-&\^]|\^{0,1}-{0,1}(?:[A-Z][a-z]*|\"(?:[^\\\"]|(?:\\\\)*\\\")*\")", strokes_string)
+        parts = re.findall(r"[*/+\-&\^]|\^{0,1}-{0,1}(?:[A-Z][a-z_]*|\"(?:[^\\\"]|(?:\\\\)*\\[^\"]|(?:\\\\)*\\\")*\"|\'(?:[^\\\']|(?:\\\\)*\\[^\']|(?:\\\\)*\\\')*\')", strokes_string)
 
         simple_strokes = [Stroke(self.key_layout)]
         mixins = self.left_mixins
@@ -161,7 +161,16 @@ class AdvancedStenoDictionary:
         # 1 - remove
         combine_action = 0
         for part in parts:
+            if part[0] == "\"":
+                part = re.sub(r"\\([\s\S])", "\\1", part[1:-1])
+            elif part[0] == "'":
+                part = re.sub(r"\\([\s\S])", "\\1", part[1:-1])
+            else:
+                part = part.lower().replace("_", " ")
+
             if part == "/":
+                combine_action = 0
+                mixins = self.left_mixins
                 simple_strokes.append(Stroke(self.key_layout))
             elif part == "&":
                 combine_action = 0
@@ -170,13 +179,19 @@ class AdvancedStenoDictionary:
                 combine_action = 1
                 mixins = self.left_mixins
             else:
-                mixin = mixins[part.lower()]
+                # Don't attempt to process an entry if mixins are missing
+                if not part in mixins:
+                    return None
+
+                mixin = mixins[part]
 
                 if isinstance(mixin.strokes, str):
                     mixin.strokes = self.to_simple_strokes(mixin.strokes)
 
-                for stroke in mixin.strokes:
+                if mixin.strokes is None:
+                    return None
 
+                for stroke in mixin.strokes:
                     if combine_action == 0:
                         simple_strokes[-1].add(stroke)
                     elif combine_action == 1:
@@ -186,10 +201,8 @@ class AdvancedStenoDictionary:
                     simple_strokes.pop()
 
                 if len(mixin.strokes) > 1:
-                    combine_action = 0
-
-                if len(mixin.strokes) > 1:
                     mixins = self.left_mixins
+                    combine_action = 0
 
                 if mixin.change_side == 1:
                     mixins = self.left_mixins
@@ -205,11 +218,16 @@ class AdvancedStenoDictionary:
             for strokes in strokes_list:
                 strokes_string = ""
 
-                for stroke in self.to_simple_strokes(strokes):
-                    strokes_string += stroke.to_string() + "/"
-                strokes_string = strokes_string[:-1]
+                simple_strokes = self.to_simple_strokes(strokes)
 
-                simple_dictionary[strokes_string] = entry
+                if simple_strokes is None:
+                    print("Error parsing entry: \""+entry+"\": \""+strokes+"\"")
+                else:
+                    for stroke in simple_strokes:
+                        strokes_string += stroke.to_string() + "/"
+                    strokes_string = strokes_string[:-1]
+
+                    simple_dictionary[strokes_string] = entry
 
         return simple_dictionary
 
@@ -220,8 +238,8 @@ if len(sys.argv) < 2:
     exit()
 
 layout = KeyLayout()
-layout.keys = "STKPWHRAOEUFRPBLGTSDZ"
-layout.break_keys = (7, 11)
+layout.keys = "STKPWHRAO*EUFRPBLGTSDZ"
+layout.break_keys = (7, 12)
 
 with open(sys.argv[1]) as data_file:
     entries = json.load(data_file)
