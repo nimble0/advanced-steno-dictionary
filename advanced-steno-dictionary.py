@@ -85,6 +85,14 @@ class StrokesMixin:
         self.change_side = change_side
 
 
+class ParseError(Exception):
+    pass
+
+
+class CircularReferenceError(Exception):
+    pass
+
+
 class AdvancedStenoDictionary:
     key_layout = None
 
@@ -152,8 +160,23 @@ class AdvancedStenoDictionary:
                         if not mixin_key in self.right_mixins:
                             self.right_mixins[mixin_key] = mixin
 
-    def to_simple_strokes(self, strokes_string):
-        parts = re.findall(r"[*/+\-&\^]|\^{0,1}-{0,1}(?:[A-Z][a-z_]*|\"(?:[^\\\"]|(?:\\\\)*\\[^\"]|(?:\\\\)*\\\")*\"|\'(?:[^\\\']|(?:\\\\)*\\[^\']|(?:\\\\)*\\\')*\')", strokes_string)
+    def to_simple_strokes(self, strokes_string, mixins_chain = []):
+        parts = re.findall(r"""
+            \s+                                               # Whitespace (ignored outside of quotes)
+            | [*/+\-&\^]                                      # Special characters
+            | (?:[A-Z][a-z_]*                                 # Non-quoted mixins
+            | \"(?:[^\\\"]|(?:\\\\)*\\[^\"]|(?:\\\\)*\\\")*\" # Double-quoted mixins
+            | \'(?:[^\\\']|(?:\\\\)*\\[^\']|(?:\\\\)*\\\')*\' # Single-quoted mixins
+            )""",
+            strokes_string,
+            re.VERBOSE)
+
+        # Don't attempt to process if the whole strokes string wasn't parsed
+        parts_total_length = 0
+        for part in parts:
+            parts_total_length += len(part)
+        if parts_total_length != len(strokes_string):
+            raise ParseError("Could not parse mixin definition: " + strokes_string)
 
         simple_strokes = [Stroke(self.key_layout)]
         mixins = self.left_mixins
@@ -161,6 +184,9 @@ class AdvancedStenoDictionary:
         # 1 - remove
         combine_action = 0
         for part in parts:
+            if part.isspace():
+                continue
+
             if part[0] == "\"":
                 part = re.sub(r"\\([\s\S])", "\\1", part[1:-1])
             elif part[0] == "'":
@@ -179,17 +205,17 @@ class AdvancedStenoDictionary:
                 combine_action = 1
                 mixins = self.left_mixins
             else:
-                # Don't attempt to process an entry if mixins are missing
                 if not part in mixins:
-                    return None
+                    raise LookupError("Mixin '" + part + "' does not exist.")
+
+                # Mixin contains a circular reference
+                if part in mixins_chain:
+                    raise CircularReferenceError("Mixin '" + part + "' contains mixins that lead back to itself.")
 
                 mixin = mixins[part]
 
                 if isinstance(mixin.strokes, str):
-                    mixin.strokes = self.to_simple_strokes(mixin.strokes)
-
-                if mixin.strokes is None:
-                    return None
+                    mixin.strokes = self.to_simple_strokes(mixin.strokes, mixins_chain + [part])
 
                 for stroke in mixin.strokes:
                     if combine_action == 0:
@@ -218,16 +244,22 @@ class AdvancedStenoDictionary:
             for strokes in strokes_list:
                 strokes_string = ""
 
-                simple_strokes = self.to_simple_strokes(strokes)
+                try:
+                    simple_strokes = self.to_simple_strokes(strokes)
 
-                if simple_strokes is None:
-                    print("Error parsing entry: \""+entry+"\": \""+strokes+"\"")
-                else:
                     for stroke in simple_strokes:
                         strokes_string += stroke.to_string() + "/"
                     strokes_string = strokes_string[:-1]
 
-                    simple_dictionary[strokes_string] = entry
+                    if strokes_string in simple_dictionary:
+                        print("Conflict detected with entry: {\""
+                            + entry + "\": \""+strokes+"\"} and: {\""
+                            + simple_dictionary[strokes_string] + "\": \"" + strokes_string + "\"}")
+                    else:
+                        simple_dictionary[strokes_string] = entry
+                except(ParseError, LookupError, CircularReferenceError), e:
+                    print("Error processing entry: {\"" + entry + "\": \"" + strokes + "\"}")
+                    print("  " + e.message)
 
         return simple_dictionary
 
