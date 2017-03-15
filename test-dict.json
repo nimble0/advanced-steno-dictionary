@@ -30,6 +30,14 @@
 "M|mr": "-PL",
 "K|mr": "-BG",
 
+"Sh|ml": "SH",
+"Th|ml": "TH",
+"Ch|ml": "CH",
+
+"Sh|mr": "-RB",
+"Th|mr": "*T",
+"Ch|mr": "-FP",
+
 "int|ml": "SPW",
 
 "to": "TO",
@@ -49,8 +57,34 @@
 "break": "BRAaK^U",
 
 "will": ["L", "WIL"],
+"willing": "Will-G",
 
 "great": "GRAaT^U",
 "great|e": "Great^W",
-"greatly": "Great-L"
+"greatly": "Great-L",
+
+"that": "THA",
+
+"you": "U",
+"he": "HE",
+"she": "SHE",
+"they": "THE",
+"we": "WE",
+
+"can|mr": "-K",
+"was|r": "-FS",
+"were|r": "-RP",
+"could|r": "-KD",
+"would|r": "-LD",
+"should|r": "-ShD",
+"said|r": "-SD",
+
+"you said": "You-Said",
+"you said that": "You_saidThat",
+
+"you can":  "You -Can",
+"we can":   "We  -Can",
+"they can": "They-Can",
+
+"that we can": "That 'we can'"
 }

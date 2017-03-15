@@ -6,17 +6,29 @@ except ImportError:
     import json
 import re
 import sys
+import copy
+
+
+def escape_single_quotes(string):
+    return re.sub(
+        r"(?P<match_char>\'|\\)",
+        "\\\\\\g<match_char>",
+        string)
+
+def escape_double_quotes(string):
+    return re.sub(
+        r"(?P<match_char>\"|\\)",
+        "\\\\\\g<match_char>",
+        string)
 
 
 class KeyLayout:
-    keys = []
-    break_keys = (0, 0)
+    def __init__(self):
+        keys = []
+        break_keys = (0, 0)
 
 
 class Stroke:
-    key_layout = None
-    keys = []
-
     def __init__(self, key_layout, stroke_string = ""):
         self.key_layout = key_layout
         self.keys = [False] * len(key_layout.keys)
@@ -72,17 +84,127 @@ class Stroke:
         return stroke_string
 
 
-class StrokesMixin:
-    strokes = []
-
-    # 0 - none
-    # 1 - left
-    # 2 - right
-    change_side = 0
-
-    def __init__(self, strokes = [], change_side = 0):
+class StrokeSequence:
+    def __init__(self, strokes = []):
         self.strokes = strokes
+
+    def add(self, stroke_sequence):
+        self.strokes[-1].add(stroke_sequence.strokes[0])
+        self.strokes += stroke_sequence.strokes[1:]
+
+    def remove(self, stroke_sequence):
+        self.strokes[-1].remove(stroke_sequence.strokes[0])
+        self.strokes += stroke_sequence.strokes[1:]
+
+    def combine(self, stroke_sequence, action):
+        if action == 0:
+            self.add(stroke_sequence)
+        else:
+            self.remove(stroke_sequence)
+
+    def to_string(self):
+        return "/".join([stroke.to_string() for stroke in self.strokes])
+
+
+class MixinPart:
+    def __init__(self, mixin, action):
+        self.mixin = mixin
+        self.action = action
+
+
+class AdvancedStrokeSequence:
+    def __init__(self, advanced_stroke_sequence_str):
+        self.str_ = advanced_stroke_sequence_str
+        self.parts = None
+        self.simple_stroke_sequences = None
+
+    def parse(self, dictionary, mixin_recursion_chain = []):
+        if not self.parts is None:
+            return
+
+        part_strs = re.findall(r"""
+            \s+                                               # Whitespace (ignored outside of quotes)
+            | [*/+\-&\^]                                      # Special characters
+            | (?:[A-Z][a-z_]*                                 # Non-quoted mixins
+            | \"(?:[^\\\"]|(?:\\\\)*\\[^\"]|(?:\\\\)*\\\")*\" # Double-quoted mixins
+            | \'(?:[^\\\']|(?:\\\\)*\\[^\']|(?:\\\\)*\\\')*\' # Single-quoted mixins
+            )""",
+            self.str_,
+            re.VERBOSE)
+
+        # Don't attempt to process if the whole strokes string wasn't parsed
+        parts_total_length = 0
+        for part_str in part_strs:
+            parts_total_length += len(part_str)
+        if parts_total_length != len(self.str_):
+            raise ParseError("Could not parse mixin definition: " + self.str_)
+
+        self.mixin_parts = []
+        action = 0
+        side = 0
+        for part_str in part_strs:
+            if part_str.isspace():
+                continue
+
+            if part_str == "&":
+                action = 0
+            elif part_str == "^":
+                action = 1
+            else:
+                mixin = dictionary.mixin(part_str, side)
+
+                # Mixin contains a circular reference
+                if mixin in mixin_recursion_chain:
+                    raise CircularReferenceError("Mixin '" + part_str + "' contains mixins that lead back to itself.")
+
+                self.mixin_parts.append(MixinPart(mixin, action))
+
+                if mixin.change_side > 0:
+                    side = mixin.change_side - 1
+
+    def to_simple_stroke_sequences(self, dictionary, mixin_recursion_chain = []):
+        if self.simple_stroke_sequences is None:
+            self.parse(dictionary, mixin_recursion_chain)
+
+            self.simple_stroke_sequences = [StrokeSequence([Stroke(dictionary.key_layout)])]
+
+            for mixin_part in self.mixin_parts:
+                stroke_sequences = []
+
+                stroke_sequences_b = mixin_part.mixin.to_simple_stroke_sequences(dictionary, mixin_recursion_chain)
+                for stroke_sequence_b in stroke_sequences_b:
+                    stroke_sequences_a = copy.deepcopy(self.simple_stroke_sequences);
+
+                    for stroke_sequence_a in stroke_sequences_a:
+                        stroke_sequence_a.combine(stroke_sequence_b, mixin_part.action)
+
+                    stroke_sequences += stroke_sequences_a
+
+                self.simple_stroke_sequences = stroke_sequences
+
+        return self.simple_stroke_sequences
+
+
+class Mixin:
+    def __init__(self, advanced_stroke_sequence_strs, change_side = 0):
+        self.advanced_stroke_sequences = []
+        for str_ in advanced_stroke_sequence_strs:
+            self.advanced_stroke_sequences.append(AdvancedStrokeSequence(str_))
+
+        # 0 - none
+        # 1 - left
+        # 2 - right
         self.change_side = change_side
+
+        self.simple_stroke_sequences = None
+
+    def to_simple_stroke_sequences(self, dictionary, mixin_recursion_chain = []):
+        if self.simple_stroke_sequences is None:
+            self.simple_stroke_sequences = []
+            for advanced_stroke_sequence in self.advanced_stroke_sequences:
+                self.simple_stroke_sequences += advanced_stroke_sequence.to_simple_stroke_sequences(dictionary)
+
+        return self.simple_stroke_sequences
 
 
 class ParseError(Exception):
@@ -94,34 +216,45 @@ class CircularReferenceError(Exception):
 
 
 class AdvancedStenoDictionary:
-    key_layout = None
-
-    left_mixins = {}
-    right_mixins = {}
-
-    entries = {}
-
-
-    def __init__(self, key_layout, entries):
+    def __init__(self, key_layout):
         self.key_layout = key_layout
+        self.mixins = {}
 
-        self.left_mixins["-"] = StrokesMixin([Stroke(self.key_layout, "")], 2)
-        self.right_mixins["-"] = self.left_mixins["-"]
-        self.left_mixins["+"] = StrokesMixin([Stroke(self.key_layout, "")], 1)
-        self.right_mixins["+"] = self.left_mixins["+"]
+        self.mixins["-"] = Mixin(["-"], 2)
+        self.mixins["+"] = Mixin(["+"], 1)
+        self.mixins["/"] = Mixin(["/"], 1)
+
+        self.mixins["-"].simple_stroke_sequences = [StrokeSequence([Stroke(self.key_layout)])]
+        self.mixins["+"].simple_stroke_sequences = [StrokeSequence([Stroke(self.key_layout)])]
+        self.mixins["/"].simple_stroke_sequences = \
+            [StrokeSequence([Stroke(self.key_layout), Stroke(self.key_layout)])]
+
+        self.mixins["--"] = self.mixins["-"]
+        self.mixins["-+"] = self.mixins["+"]
+        self.mixins["-/"] = self.mixins["/"]
 
         for i in range(len(self.key_layout.keys)):
             key = self.key_layout.keys[i]
+            key_lower = key.lower()
 
             if i < self.key_layout.break_keys[0]:
-                self.left_mixins[key.lower()] = StrokesMixin([Stroke(self.key_layout, key)])
+                self.mixins[key_lower] = Mixin([key])
+                self.mixins[key_lower].simple_stroke_sequences = \
+                    [StrokeSequence([Stroke(self.key_layout, key)])]
             elif i >= self.key_layout.break_keys[1]:
-                self.right_mixins[key.lower()] = StrokesMixin([Stroke(self.key_layout, "-" + key)])
+                self.mixins["-" + key_lower] = Mixin([key])
+                self.mixins["-" + key_lower].simple_stroke_sequences = \
+                    [StrokeSequence([Stroke(self.key_layout, "-" + key)])]
             else:
-                self.left_mixins[key.lower()] = StrokesMixin([Stroke(self.key_layout, key)], 2)
-                self.right_mixins[key.lower()] = self.left_mixins[key.lower()]
+                self.mixins[key_lower] = Mixin(["-" + key], 2)
+                self.mixins[key_lower].simple_stroke_sequences = \
+                    [StrokeSequence([Stroke(self.key_layout, key)])]
+                self.mixins["-" + key_lower] = self.mixins[key_lower]
 
-        for entry, strokes in entries.items():
+        self.entries = {}
+
+    def add_entries(self, entries):
+        for entry, stroke_sequences in entries.items():
             meta_entry = ""
             meta_divider = entry.rfind("|")
             if meta_divider != -1:
@@ -129,7 +262,6 @@ class AdvancedStenoDictionary:
                 entry = entry[:meta_divider]
 
             # Entry meta information
-            mixin_key = entry.lower()
             mixin_only = meta_entry.find("m") != -1
             entry_only = meta_entry.find("e") != -1
             # 0 - both
@@ -139,126 +271,72 @@ class AdvancedStenoDictionary:
             change_side = (meta_entry.find("L") != -1) | ((meta_entry.find("R") != -1)<<1)
 
 
-            strokes_list = strokes
-            if not isinstance(strokes, list):
-                strokes_list = [strokes]
+            stroke_sequences_ = stroke_sequences
+            if not isinstance(stroke_sequences_, list):
+                stroke_sequences_ = [stroke_sequences_]
 
             if not mixin_only:
                 if not entry in self.entries:
                     self.entries[entry] = []
-                self.entries[entry] += strokes_list
+                self.entries[entry] += stroke_sequences_
 
             if not entry_only:
-                for strokes in strokes_list:
-                    mixin = StrokesMixin(strokes, change_side)
+                self.add_mixin(entry, mixin_side, change_side, stroke_sequences_)
 
-                    if mixin_side == 0 or mixin_side == 1:
-                        if not mixin_key in self.left_mixins:
-                            self.left_mixins[mixin_key] = mixin
+    def add_mixin(self, key, side, change_side, entries):
+        mixin_keys = [
+            "\"" + escape_double_quotes(key) + "\"",
+            "'" + escape_single_quotes(key) + "'"]
 
-                    if mixin_side == 0 or mixin_side == 2:
-                        if not mixin_key in self.right_mixins:
-                            self.right_mixins[mixin_key] = mixin
+        # Only add simplified mixin key for keys that don't include
+        # special characters and start with a letter.
+        if re.match(r"[a-zA-Z][a-zA-Z ]*$", key):
+            mixin_keys.append(key.lower().replace(" ", "_"))
 
-    def to_simple_strokes(self, strokes_string, mixins_chain = []):
-        parts = re.findall(r"""
-            \s+                                               # Whitespace (ignored outside of quotes)
-            | [*/+\-&\^]                                      # Special characters
-            | (?:[A-Z][a-z_]*                                 # Non-quoted mixins
-            | \"(?:[^\\\"]|(?:\\\\)*\\[^\"]|(?:\\\\)*\\\")*\" # Double-quoted mixins
-            | \'(?:[^\\\']|(?:\\\\)*\\[^\']|(?:\\\\)*\\\')*\' # Single-quoted mixins
-            )""",
-            strokes_string,
-            re.VERBOSE)
+        mixin = Mixin(entries, change_side)
 
-        # Don't attempt to process if the whole strokes string wasn't parsed
-        parts_total_length = 0
-        for part in parts:
-            parts_total_length += len(part)
-        if parts_total_length != len(strokes_string):
-            raise ParseError("Could not parse mixin definition: " + strokes_string)
+        if side == 2:
+            for i, key in enumerate(mixin_keys):
+                mixin_keys[i] = "-" + key
+        elif side != 1:
+            add_mixin_keys = []
+            for key in mixin_keys:
+                add_mixin_keys.append("-" + key)
+            mixin_keys += add_mixin_keys
 
-        simple_strokes = [Stroke(self.key_layout)]
-        mixins = self.left_mixins
-        # 0 - add
-        # 1 - remove
-        combine_action = 0
-        for part in parts:
-            if part.isspace():
-                continue
+        for key in mixin_keys:
+            if key in self.mixins:
+                print("Redefinition of mixin " + key)
 
-            if part[0] == "\"":
-                part = re.sub(r"\\([\s\S])", "\\1", part[1:-1])
-            elif part[0] == "'":
-                part = re.sub(r"\\([\s\S])", "\\1", part[1:-1])
-            else:
-                part = part.lower().replace("_", " ")
+            self.mixins[key] = mixin
 
-            if part == "/":
-                combine_action = 0
-                mixins = self.left_mixins
-                simple_strokes.append(Stroke(self.key_layout))
-            elif part == "&":
-                combine_action = 0
-                mixins = self.left_mixins
-            elif part == "^":
-                combine_action = 1
-                mixins = self.left_mixins
-            else:
-                if not part in mixins:
-                    raise LookupError("Mixin '" + part + "' does not exist.")
+    def mixin(self, key, side):
+        key = ("-" if side == 1 else "") + key[0].lower() + key[1:]
 
-                # Mixin contains a circular reference
-                if part in mixins_chain:
-                    raise CircularReferenceError("Mixin '" + part + "' contains mixins that lead back to itself.")
+        if not key in self.mixins:
+            raise LookupError("Mixin '" + key + "' does not exist.")
 
-                mixin = mixins[part]
-
-                if isinstance(mixin.strokes, str):
-                    mixin.strokes = self.to_simple_strokes(mixin.strokes, mixins_chain + [part])
-
-                for stroke in mixin.strokes:
-                    if combine_action == 0:
-                        simple_strokes[-1].add(stroke)
-                    elif combine_action == 1:
-                        simple_strokes[-1].remove(stroke)
-                    simple_strokes.append(Stroke(self.key_layout))
-                if len(mixin.strokes) > 0:
-                    simple_strokes.pop()
-
-                if len(mixin.strokes) > 1:
-                    mixins = self.left_mixins
-                    combine_action = 0
-
-                if mixin.change_side == 1:
-                    mixins = self.left_mixins
-                elif mixin.change_side == 2:
-                    mixins = self.right_mixins
-
-        return simple_strokes
+        return self.mixins[key]
 
     def to_simple_dictionary(self):
         simple_dictionary = {}
 
-        for entry, strokes_list in self.entries.items():
-            for strokes in strokes_list:
-                strokes_string = ""
-
+        for entry, stroke_sequences in self.entries.items():
+            for stroke_sequence in stroke_sequences:
                 try:
-                    simple_strokes = self.to_simple_strokes(strokes)
+                    simple_stroke_sequences = AdvancedStrokeSequence(stroke_sequence) \
+                        .to_simple_stroke_sequences(self)
 
-                    for stroke in simple_strokes:
-                        strokes_string += stroke.to_string() + "/"
-                    strokes_string = strokes_string[:-1]
+                    for simple_stroke_sequence in simple_stroke_sequences:
+                        strokes_string = simple_stroke_sequence.to_string()
+                        if strokes_string in simple_dictionary:
+                            print("Conflict detected with entry: {\""
+                                + entry + "\": \"" + stroke_sequence + "\"} and: {\""
+                                + simple_dictionary[strokes_string] + "\": \"" + strokes_string + "\"}")
 
-                    if strokes_string in simple_dictionary:
-                        print("Conflict detected with entry: {\""
-                            + entry + "\": \""+strokes+"\"} and: {\""
-                            + simple_dictionary[strokes_string] + "\": \"" + strokes_string + "\"}")
-                    else:
                         simple_dictionary[strokes_string] = entry
                 except(ParseError, LookupError, CircularReferenceError), e:
-                    print("Error processing entry: {\"" + entry + "\": \"" + strokes + "\"}")
+                    print("Error processing entry: {\"" + entry + "\": \"" + stroke_sequence + "\"}")
                     print("  " + e.message)
 
         return simple_dictionary
@@ -276,7 +354,8 @@ layout.break_keys = (7, 12)
 with open(sys.argv[1]) as data_file:
     entries = json.load(data_file)
 
-dictionary = AdvancedStenoDictionary(layout, entries)
+dictionary = AdvancedStenoDictionary(layout)
+dictionary.add_entries(entries)
 
 simple_dictionary = dictionary.to_simple_dictionary()
 
