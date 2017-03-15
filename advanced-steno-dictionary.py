@@ -7,6 +7,8 @@ except ImportError:
 import re
 import sys
 import copy
+import logging
+import collections
 
 
 def escape_single_quotes(string):
@@ -251,7 +253,7 @@ class AdvancedStenoDictionary:
                     [StrokeSequence([Stroke(self.key_layout, key)])]
                 self.mixins["-" + key_lower] = self.mixins[key_lower]
 
-        self.entries = {}
+        self.entries = collections.OrderedDict()
 
     def add_entries(self, entries):
         for entry, stroke_sequences in entries.items():
@@ -306,7 +308,7 @@ class AdvancedStenoDictionary:
 
         for key in mixin_keys:
             if key in self.mixins:
-                print("Redefinition of mixin " + key)
+                logging.warning("Redefinition of mixin " + key)
 
             self.mixins[key] = mixin
 
@@ -330,17 +332,16 @@ class AdvancedStenoDictionary:
                     for simple_stroke_sequence in simple_stroke_sequences:
                         strokes_string = simple_stroke_sequence.to_string()
                         if strokes_string in simple_dictionary:
-                            print("Conflict detected with entry: {\""
+                            logging.warning("Conflict detected with entry: {\""
                                 + entry + "\": \"" + stroke_sequence + "\"} and: {\""
                                 + simple_dictionary[strokes_string] + "\": \"" + strokes_string + "\"}")
 
                         simple_dictionary[strokes_string] = entry
                 except(ParseError, LookupError, CircularReferenceError), e:
-                    print("Error processing entry: {\"" + entry + "\": \"" + stroke_sequence + "\"}")
-                    print("  " + e.message)
+                    logging.warning("Error processing entry: {\"" + entry + "\": \"" + stroke_sequence + "\"}")
+                    logging.warning("  " + e.message)
 
         return simple_dictionary
-
 
 
 
@@ -352,7 +353,7 @@ layout.keys = "STKPWHRAO*EUFRPBLGTSDZ"
 layout.break_keys = (7, 12)
 
 with open(sys.argv[1]) as data_file:
-    entries = json.load(data_file)
+    entries = json.load(data_file, object_pairs_hook=collections.OrderedDict)
 
 dictionary = AdvancedStenoDictionary(layout)
 dictionary.add_entries(entries)
