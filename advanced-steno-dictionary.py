@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python
 
 import sys
 try:
@@ -6,7 +6,6 @@ try:
 except ImportError:
     import json
 import collections
-import logging
 
 from stroke import KeyLayout
 from advanced_steno_dictionary import AdvancedStenoDictionary
