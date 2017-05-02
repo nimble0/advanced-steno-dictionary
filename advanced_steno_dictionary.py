@@ -163,7 +163,7 @@ class AdvancedStenoDictionary:
                                 + simple_dictionary[strokes_string] + "\": \"" + strokes_string + "\"}")
 
                         simple_dictionary[strokes_string] = entry
-                except(ParseError, LookupError, CircularReferenceError), e:
+                except(ParseError, LookupError, CircularReferenceError) as e:
                     logging.warning("Error processing entry: {\"" + entry + "\": \"" + stroke_sequence + "\"}")
                     logging.warning("  " + e.message)
 
