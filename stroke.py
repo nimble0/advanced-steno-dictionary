@@ -1,3 +1,5 @@
+import copy
+
 class KeyLayout:
     def __init__(self):
         keys = []
@@ -25,12 +27,16 @@ class Stroke:
             self.keys = [False] * len(key_layout.keys)
 
     def add(self, stroke):
-        for i in range(0, len(stroke.keys)):
-            self.keys[i] = self.keys[i] or stroke.keys[i]
+        self.keys = [self.keys[i] or stroke.keys[i]
+            for i in range(0, len(stroke.keys))]
+
+        return self
 
     def remove(self, stroke):
-        for i in range(0, len(stroke.keys)):
-            self.keys[i] = self.keys[i] and not stroke.keys[i]
+        self.keys = [self.keys[i] and not stroke.keys[i]
+            for i in range(0, len(stroke.keys))]
+
+        return self
 
     def to_string_long(self):
         stroke_string = ""
@@ -67,15 +73,24 @@ class StrokeSequence:
         self.strokes[-1].add(stroke_sequence.strokes[0])
         self.strokes += stroke_sequence.strokes[1:]
 
+        return self
+
     def remove(self, stroke_sequence):
         self.strokes[-1].remove(stroke_sequence.strokes[0])
         self.strokes += stroke_sequence.strokes[1:]
+
+        return self
 
     def combine(self, stroke_sequence, action):
         if action == 0:
             self.add(stroke_sequence)
         else:
             self.remove(stroke_sequence)
+
+        return self
+
+    def copy(self):
+        return StrokeSequence([copy.copy(stroke) for stroke in self.strokes])
 
     def to_string(self):
         return "/".join([stroke.to_string() for stroke in self.strokes])

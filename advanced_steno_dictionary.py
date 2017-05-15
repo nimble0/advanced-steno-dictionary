@@ -53,35 +53,24 @@ class AdvancedStenoDictionary:
         self.key_layout = key_layout
         self.mixins = {}
 
-        self.mixins["--"] = Mixin(2)
-        self.mixins["+-"] = Mixin(1)
-        self.mixins["/-"] = Mixin(1)
-
-        self.mixins["--"].simple_stroke_sequences = [StrokeSequence([Stroke(self.key_layout)])]
-        self.mixins["+-"].simple_stroke_sequences = [StrokeSequence([Stroke(self.key_layout)])]
-        self.mixins["/-"].simple_stroke_sequences = \
-            [StrokeSequence([Stroke(self.key_layout), Stroke(self.key_layout)])]
-
-        self.mixins["-+"] = self.mixins["+-"]
-        self.mixins["-/"] = self.mixins["/-"]
+        self._add_base_mixin("", 0, 0, [StrokeSequence([Stroke(self.key_layout)])])
+        self._add_base_mixin("-", 0, 2, [StrokeSequence([Stroke(self.key_layout)])])
+        self._add_base_mixin("+", 0, 1, [StrokeSequence([Stroke(self.key_layout)])])
+        self._add_base_mixin("/", 0, 1, [StrokeSequence([Stroke(self.key_layout)])])
 
         for i in range(len(self.key_layout.keys)):
             key = self.key_layout.keys[i]
-            key_lower = key.lower()
 
+            key_lower = key.lower()
             if i < self.key_layout.break_keys[0]:
-                self.mixins[key_lower + "-"] = Mixin()
-                self.mixins[key_lower + "-"].simple_stroke_sequences = \
-                    [StrokeSequence([Stroke(self.key_layout, key)])]
+                self._add_base_mixin(key_lower, 1, 0,
+                    [StrokeSequence([Stroke(self.key_layout, key)])])
             elif i >= self.key_layout.break_keys[1]:
-                self.mixins["-" + key_lower] = Mixin()
-                self.mixins["-" + key_lower].simple_stroke_sequences = \
-                    [StrokeSequence([Stroke(self.key_layout, "-" + key)])]
+                self._add_base_mixin(key_lower, 2, 0,
+                    [StrokeSequence([Stroke(self.key_layout, "-" + key)])])
             else:
-                self.mixins[key_lower + "-"] = Mixin(2)
-                self.mixins[key_lower + "-"].simple_stroke_sequences = \
-                    [StrokeSequence([Stroke(self.key_layout, key)])]
-                self.mixins["-" + key_lower] = self.mixins[key_lower + "-"]
+                self._add_base_mixin(key_lower, 0, 2,
+                    [StrokeSequence([Stroke(self.key_layout, key)])])
 
         self.entries = collections.OrderedDict()
 
@@ -95,7 +84,7 @@ class AdvancedStenoDictionary:
 
             ss_strs = [ss_strs] if isinstance(ss_strs, str) else ss_strs
             for ss_str in ss_strs:
-                ss = AdvancedStrokeSequence(ss_str)
+                ss = AdvancedStrokeSequence(ss_str, translation)
 
                 for indices in permutations:
                     simple_translation = translation.lookup(indices)
@@ -113,41 +102,53 @@ class AdvancedStenoDictionary:
                             self.entries[simple_translation] = []
                         self.entries[simple_translation].append(bound_ss)
 
-    def add_mixin(self, key, side, change_side, entry):
-        mixin_keys = [
-            "\"" + escape_double_quotes(key) + "\"",
-            "'" + escape_single_quotes(key) + "'"]
-
-        # Only add simplified mixin key for keys that don't include
-        # special characters and start with a letter.
-        if re.match(r"[a-zA-Z][a-zA-Z ]*$", key):
-            mixin_keys.append(key.lower().replace(" ", "_"))
-
-        if side == 0:
-            mixin_keys = \
-                  [key + "-" for key in mixin_keys] \
-                + ["-" + key for key in mixin_keys]
-        elif side == 1:
-            mixin_keys = [key + "-" for key in mixin_keys]
-        elif side == 2:
-            mixin_keys = ["-" + key for key in mixin_keys]
+    def _add_mixin_w_keys(self, keys, side, change_side, entry):
+        keys = ([key + "-" for key in keys] if side == 0 or side == 1 else []) \
+            + (["-" + key for key in keys] if side == 0 or side == 2 else [])
 
         mixin = Mixin(change_side)
-        if mixin_keys[0] in self.mixins:
-            mixin = self.mixins[mixin_keys[0]]
+        if keys[0] in self.mixins:
+            mixin = self.mixins[keys[0]]
             if change_side != mixin.change_side:
-                logging.warning("Mixin " + key + " definition differs from existing meta data.")
+                logging.warning("Mixin " + keys[0] + " definition differs from existing meta data.")
                 return
         else:
-            for key in mixin_keys:
+            for key in keys:
                 self.mixins[key] = mixin
 
         mixin.add(entry)
 
+    def add_mixin(self, key, side, change_side, entry):
+        keys = [
+            "\"" + escape_double_quotes(key) + "\"",
+            "'" + escape_single_quotes(key) + "'"
+        ]
+
+        # Only add simplified mixin key for keys that don't include
+        # special characters and start with a letter.
+        if re.match(r"[a-zA-Z][a-zA-Z ]*$", key):
+            keys.append(key.lower().replace(" ", "_"))
+
+        self._add_mixin_w_keys(keys, side, change_side, entry)
+
+    def _add_base_mixin(self, key, side, change_side, simple_stroke_sequences):
+        keys = [
+            key,
+            "\"" + escape_double_quotes(key) + "\"",
+            "'" + escape_single_quotes(key) + "'"
+        ]
+
+        self._add_mixin_w_keys(keys, side, change_side, None)
+
+        self.mixin(key, side) \
+            .simple_stroke_sequences = simple_stroke_sequences
+
     def mixin(self, key, side):
-        key = ("-" if side == 1 else "") \
-            + key[0].lower() + key[1:] \
-            + ("-" if side == 0 else "")
+        if len(key) > 0:
+            key = key[0].lower() + key[1:]
+        key = ("-" if side == 2 else "") \
+            + key \
+            + ("-" if side == 0 or side == 1 else "")
 
         if not key in self.mixins:
             raise LookupError("Mixin '" + key + "' does not exist.")

@@ -6,7 +6,7 @@ class AdvancedTranslation(PartsList):
     translation_pattern = re.compile(
         r"""
             [\[\],]
-        | (?:[^\[\],]|\\[\[\],])*
+        | (?:[^\[\],]|\\[\[\],])+
         """,
         re.VERBOSE)
 
@@ -78,3 +78,12 @@ class AdvancedTranslation(PartsList):
                 value += part
 
         return value
+
+    def option_group(self, index):
+        i = 0
+        for part in self.parts:
+            if isinstance(part, BuildableOptionGroup):
+                if i == index:
+                    return part
+                i += 1
+        return None
