@@ -19,7 +19,8 @@ OptionGroup.register(tuple)
 class OptionGroupStack:
     def __init__(self, option_group_object):
         self.option_group_object = option_group_object
-        self.stack = [copy.deepcopy(self.option_group_object)]
+        self.stack = []
+        self.begin_group()
 
     def __len__(self):
         return len(self.stack)

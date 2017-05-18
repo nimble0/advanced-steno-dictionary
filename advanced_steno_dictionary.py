@@ -39,12 +39,12 @@ class Mixin:
     def add(self, ss):
         self.advanced_stroke_sequences.append(ss)
 
-    def to_simple_stroke_sequences(self, dictionary, mixin_recursion_chain = []):
+    def to_simple_stroke_sequences(self, mixin_recursion_chain = []):
         if self.simple_stroke_sequences is None:
             self.simple_stroke_sequences = []
             for advanced_stroke_sequence in self.advanced_stroke_sequences:
                 self.simple_stroke_sequences += advanced_stroke_sequence \
-                    .to_simple_stroke_sequences(dictionary, mixin_recursion_chain)
+                    .to_simple_stroke_sequences(mixin_recursion_chain)
 
         return self.simple_stroke_sequences
 
@@ -72,6 +72,11 @@ class AdvancedStenoDictionary:
                 self._add_base_mixin(key_lower, 0, 2,
                     [StrokeSequence([Stroke(self.key_layout, key)])])
 
+        self.advanced_ss_pattern = re.compile(
+            AdvancedStrokeSequence.base_pattern \
+                + r"| [" + re.escape("".join(self.key_layout.keys)) + "]"
+            , re.VERBOSE)
+
         self.entries = collections.OrderedDict()
 
     def add_entries(self, entries):
@@ -84,7 +89,7 @@ class AdvancedStenoDictionary:
 
             ss_strs = [ss_strs] if isinstance(ss_strs, str) else ss_strs
             for ss_str in ss_strs:
-                ss = AdvancedStrokeSequence(ss_str, translation)
+                ss = AdvancedStrokeSequence(self, ss_str, translation)
 
                 for indices in permutations:
                     simple_translation = translation.lookup(indices)
@@ -161,7 +166,7 @@ class AdvancedStenoDictionary:
         for entry, adv_stroke_sequences in self.entries.items():
             for adv_ss in adv_stroke_sequences:
                 try:
-                    for simple_ss in adv_ss.to_simple_stroke_sequences(self):
+                    for simple_ss in adv_ss.to_simple_stroke_sequences():
                         strokes_string = simple_ss.to_string()
                         if strokes_string in simple_dictionary:
                             logging.warning("Conflict detected with entry: {\""
