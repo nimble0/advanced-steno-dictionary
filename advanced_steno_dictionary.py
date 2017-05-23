@@ -56,7 +56,7 @@ class AdvancedStenoDictionary:
         self._add_base_mixin("", 0, 0, [StrokeSequence([Stroke(self.key_layout)])])
         self._add_base_mixin("-", 0, 2, [StrokeSequence([Stroke(self.key_layout)])])
         self._add_base_mixin("+", 0, 1, [StrokeSequence([Stroke(self.key_layout)])])
-        self._add_base_mixin("/", 0, 1, [StrokeSequence([Stroke(self.key_layout)])])
+        self._add_base_mixin("/", 0, 1, [StrokeSequence([Stroke(self.key_layout)]*2)])
 
         for i in range(len(self.key_layout.keys)):
             key = self.key_layout.keys[i]
