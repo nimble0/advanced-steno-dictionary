@@ -8,6 +8,7 @@ from permutate import \
     BuildableOptionGroup, \
     OptionGroupStack, \
     permutate_tree_indices
+from util import double_quote_str
 
 
 class AdvancedStrokeSequencePart:
@@ -82,14 +83,15 @@ class AdvancedStrokeSequenceOptionGroup(BuildableOptionGroup):
                 if len(permutations) == 0:
                     return AdvancedStrokeSequencePart(
                         self.dictionary,
-                        self.fill_in_options[i].lookup(()),
+                        double_quote_str(self.fill_in_options[i].lookup(())),
                         self.inner_side,
                         self.inner_action)
                 else:
                     return AdvancedStrokeSequenceExpandedOptionGroup({
                         permutation: AdvancedStrokeSequencePart(
                             self.dictionary,
-                            self.fill_in_options[i].lookup(permutation),
+                            double_quote_str(
+                                self.fill_in_options[i].lookup(permutation)),
                             self.inner_side,
                             self.inner_action)
                         for permutation in permutations})

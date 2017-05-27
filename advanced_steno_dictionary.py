@@ -10,19 +10,7 @@ from advanced_stroke_sequence import \
     ParseError, \
     CircularReferenceError
 from permutate import permutate_tree_indices
-
-
-def escape_single_quotes(string):
-    return re.sub(
-        r"(?P<match_char>\'|\\)",
-        "\\\\\\g<match_char>",
-        string)
-
-def escape_double_quotes(string):
-    return re.sub(
-        r"(?P<match_char>\"|\\)",
-        "\\\\\\g<match_char>",
-        string)
+from util import single_quote_str, double_quote_str
 
 
 class Mixin:
@@ -60,16 +48,14 @@ class AdvancedStenoDictionary:
 
         for i in range(len(self.key_layout.keys)):
             key = self.key_layout.keys[i]
-
-            key_lower = key.lower()
             if i < self.key_layout.break_keys[0]:
-                self._add_base_mixin(key_lower, 1, 0,
+                self._add_base_mixin(key, 1, 0,
                     [StrokeSequence([Stroke(self.key_layout, key)])])
             elif i >= self.key_layout.break_keys[1]:
-                self._add_base_mixin(key_lower, 2, 0,
+                self._add_base_mixin(key, 2, 0,
                     [StrokeSequence([Stroke(self.key_layout, "-" + key)])])
             else:
-                self._add_base_mixin(key_lower, 0, 2,
+                self._add_base_mixin(key, 0, 2,
                     [StrokeSequence([Stroke(self.key_layout, key)])])
 
         self.advanced_ss_pattern = re.compile(
@@ -125,8 +111,8 @@ class AdvancedStenoDictionary:
 
     def add_mixin(self, key, side, change_side, entry):
         keys = [
-            "\"" + escape_double_quotes(key) + "\"",
-            "'" + escape_single_quotes(key) + "'"
+            double_quote_str(key),
+            single_quote_str(key)
         ]
 
         # Only add simplified mixin key for keys that don't include
@@ -138,9 +124,9 @@ class AdvancedStenoDictionary:
 
     def _add_base_mixin(self, key, side, change_side, simple_stroke_sequences):
         keys = [
-            key,
-            "\"" + escape_double_quotes(key) + "\"",
-            "'" + escape_single_quotes(key) + "'"
+            key.lower(),
+            double_quote_str(key),
+            single_quote_str(key)
         ]
 
         self._add_mixin_w_keys(keys, side, change_side, None)
