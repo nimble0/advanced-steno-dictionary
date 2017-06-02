@@ -84,16 +84,16 @@ class AdvancedStrokeSequenceOptionGroup(BuildableOptionGroup):
                     return AdvancedStrokeSequencePart(
                         self.dictionary,
                         double_quote_str(self.fill_in_options[i].lookup(())),
-                        self.inner_side,
-                        self.inner_action)
+                        self.start_side,
+                        self.start_action)
                 else:
                     return AdvancedStrokeSequenceExpandedOptionGroup({
                         permutation: AdvancedStrokeSequencePart(
                             self.dictionary,
                             double_quote_str(
                                 self.fill_in_options[i].lookup(permutation)),
-                            self.inner_side,
-                            self.inner_action)
+                            self.start_side,
+                            self.start_action)
                         for permutation in permutations})
 
         self.options = [fill_in_option(i)
