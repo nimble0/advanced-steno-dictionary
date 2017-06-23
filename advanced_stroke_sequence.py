@@ -48,15 +48,13 @@ class AdvancedStrokeSequenceExpandedOptionGroup(OptionGroup):
 class AdvancedStrokeSequenceOptionGroup(BuildableOptionGroup):
     def __init__(self,
         dictionary,
+        side,
         action,
         bound_index,
-        start_side,
-        start_action,
         fill_in_options
     ):
         self.dictionary = dictionary
-        self.start_side = start_side
-        self.start_action = start_action
+        self.start_side = side
         self.option_i = -1
         super().__init__(None)
         self.action = action
@@ -67,7 +65,7 @@ class AdvancedStrokeSequenceOptionGroup(BuildableOptionGroup):
     def add_option(self):
         self.options.append(AdvancedStrokeSequence.empty(self.dictionary))
         self.inner_side = self.start_side
-        self.inner_action = self.start_action
+        self.inner_action = 0
         self.option_i += 1
         self.sub_option_group_i = 0
 
@@ -85,7 +83,7 @@ class AdvancedStrokeSequenceOptionGroup(BuildableOptionGroup):
                         self.dictionary,
                         double_quote_str(self.fill_in_options[i].lookup(())),
                         self.start_side,
-                        self.start_action)
+                        0)
                 else:
                     return AdvancedStrokeSequenceExpandedOptionGroup({
                         permutation: AdvancedStrokeSequencePart(
@@ -93,7 +91,7 @@ class AdvancedStrokeSequenceOptionGroup(BuildableOptionGroup):
                             double_quote_str(
                                 self.fill_in_options[i].lookup(permutation)),
                             self.start_side,
-                            self.start_action)
+                            0)
                         for permutation in permutations})
 
         self.options = [fill_in_option(i)
@@ -120,16 +118,15 @@ class AdvancedStrokeSequenceOptionGroupStack(OptionGroupStack):
     def __init__(self, dictionary, fill_in_options):
         self.dictionary = dictionary
         self.stack = [AdvancedStrokeSequenceOptionGroup(
-            self.dictionary, 0, 0, 1, 0, fill_in_options)]
+            self.dictionary, 0, 0, 1, fill_in_options)]
 
     def begin_group(self, action, bound_index):
         self.stack[-1].sub_option_group_i += 1
         self.stack.append(AdvancedStrokeSequenceOptionGroup(
             self.dictionary,
+            self.stack[-1].inner_side,
             action,
             bound_index,
-            self.stack[-1].inner_side,
-            self.stack[-1].inner_action,
             self.stack[-1].fill_in_options[self.stack[-1].option_i] \
                 .option_group(bound_index)))
 
