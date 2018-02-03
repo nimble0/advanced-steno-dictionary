@@ -191,7 +191,7 @@ class AdvancedStrokeSequence(PartsList):
             self.dictionary,
             (self.fill_in_options,))
         for part_str in part_strs:
-            if part_str.isspace() or part_str == "''" or part_str == '""':
+            if part_str.isspace():
                 continue
 
             if part_str == "&":

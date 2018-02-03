@@ -86,5 +86,7 @@
 "we can":   "We  -Can",
 "they can": "They-Can",
 
-"that we can": "That 'we can'"
+"that we can": "That 'we can'",
+
+"[{>},]{&[A,B,C]}": "['',-P][]"
 }
