@@ -10,7 +10,7 @@ from advanced_stroke_sequence import \
     ParseError, \
     CircularReferenceError
 from permutate import permutate_tree_indices
-from util import single_quote_str, double_quote_str
+from util import single_quote_str, double_quote_str, unquote_str
 
 
 class Mixin:
@@ -93,58 +93,57 @@ class AdvancedStenoDictionary:
                             self.entries[simple_translation] = []
                         self.entries[simple_translation].append(bound_ss)
 
-    def _add_mixin_w_keys(self, keys, side, change_side, entry):
-        keys = ([key + "-" for key in keys] if side == 0 or side == 1 else []) \
-            + (["-" + key for key in keys] if side == 0 or side == 2 else [])
-
-        mixin = Mixin(change_side)
-        if keys[0] in self.mixins:
-            mixin = self.mixins[keys[0]]
-            if change_side != mixin.change_side:
-                logging.warning("Mixin " + keys[0] + " definition differs from existing meta data.")
-                return
-        else:
-            for key in keys:
-                self.mixins[key] = mixin
-
-        mixin.add(entry)
-
     def add_mixin(self, key, side, change_side, entry):
-        keys = [
-            double_quote_str(key),
-            single_quote_str(key)
-        ]
+        if side == 0:
+            self.add_mixin(key, 1, change_side, entry)
+            self.add_mixin(key, 2, change_side, entry)
+            return
 
-        # Only add simplified mixin key for keys that don't include
-        # special characters and start with a letter.
-        if re.match(r"[a-zA-Z][a-zA-Z ]*$", key):
-            keys.append(key.lower().replace(" ", "_"))
+        key_ = ("-" if side == 2 else "") + double_quote_str(key)
+        if key_ in self.mixins:
+            mixin = self.mixins[key_]
+            if change_side == mixin.change_side:
+                mixin.add(entry)
+            else:
+                logging.warning("Mixin " + keys[0] + " definition differs from existing meta data.")
+        else:
+            mixin = Mixin(change_side)
+            mixin.add(entry)
+            self.mixins[key_] = mixin
 
-        self._add_mixin_w_keys(keys, side, change_side, entry)
+            # Only add simplified mixin key for keys that don't include
+            # special characters and start with a letter.
+            if re.match(r"[a-zA-Z][a-zA-Z ]*$", key):
+                self.mixins[("-" if side == 2 else "") + key.lower().replace(" ", "_")] = mixin
 
     def _add_base_mixin(self, key, side, change_side, simple_stroke_sequences):
-        keys = [
-            key.lower(),
-            double_quote_str(key),
-            single_quote_str(key)
-        ]
+        mixin = Mixin(change_side)
+        mixin.simple_stroke_sequences = simple_stroke_sequences
 
-        self._add_mixin_w_keys(keys, side, change_side, None)
+        simplified_key = key.lower()
+        long_key = double_quote_str(key);
 
-        self.mixin(key, side) \
-            .simple_stroke_sequences = simple_stroke_sequences
+        if side == 0 or side == 1:
+            self.mixins[simplified_key] = mixin
+            self.mixins[long_key] = mixin
+        if side == 0 or side == 2:
+            self.mixins["-" + simplified_key] = mixin
+            self.mixins["-" + long_key] = mixin
 
     def mixin(self, key, side):
+        key_ = key;
         if len(key) > 0:
-            key = key[0].lower() + key[1:]
-        key = ("-" if side == 2 else "") \
-            + key \
-            + ("-" if side == 0 or side == 1 else "")
+            if key[0] == "'":
+                key_ = double_quote_str(unquote_str(key))
+            elif key[0] != "\"":
+                key_ = key.lower()
 
-        if not key in self.mixins:
-            raise LookupError("Mixin '" + key + "' does not exist.")
+        key_ = ("-" if side == 2 else "") + key_
 
-        return self.mixins[key]
+        if not key_ in self.mixins:
+            raise LookupError("Mixin " + key_ + " does not exist.")
+
+        return self.mixins[key_]
 
     def to_simple_dictionary(self):
         simple_dictionary = {}

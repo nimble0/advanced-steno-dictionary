@@ -12,3 +12,6 @@ def double_quote_str(string):
         r"(?P<match_char>\"|\\)",
         "\\\\\\g<match_char>",
         string) + "\""
+
+def unquote_str(string):
+    return string[1:-1].replace("\\'", "'")
