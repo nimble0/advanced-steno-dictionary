@@ -6,35 +6,22 @@ from advanced_translation import AdvancedTranslation
 from stroke import Stroke, StrokeSequence
 from advanced_stroke_sequence import \
     AdvancedStrokeSequence, \
-    BoundAdvancedStrokeSequence, \
-    ParseError, \
-    CircularReferenceError
+    ParseError
 from permutate import permutate_tree_indices
 from util import single_quote_str, double_quote_str, unquote_str
 
 
 class Mixin:
     def __init__(self, change_side = 0):
-        self.advanced_stroke_sequences = []
-
         # 0 - none
         # 1 - left
         # 2 - right
         self.change_side = change_side
 
-        self.simple_stroke_sequences = None
+        self.simple_stroke_sequences = []
 
-    def add(self, ss):
-        self.advanced_stroke_sequences.append(ss)
-
-    def to_simple_stroke_sequences(self, mixin_recursion_chain = []):
-        if self.simple_stroke_sequences is None:
-            self.simple_stroke_sequences = []
-            for advanced_stroke_sequence in self.advanced_stroke_sequences:
-                self.simple_stroke_sequences += advanced_stroke_sequence \
-                    .to_simple_stroke_sequences(mixin_recursion_chain)
-
-        return self.simple_stroke_sequences
+    def add(self, stroke_sequences):
+        self.simple_stroke_sequences += stroke_sequences
 
 class AdvancedStenoDictionary:
     def __init__(self, key_layout):
@@ -75,40 +62,54 @@ class AdvancedStenoDictionary:
 
             ss_strs = [ss_strs] if isinstance(ss_strs, str) else ss_strs
             for ss_str in ss_strs:
-                ss = AdvancedStrokeSequence(self, ss_str, translation)
+                try:
+                    ss = AdvancedStrokeSequence(self, ss_str, translation)
 
-                for indices in permutations:
-                    simple_translation = translation.lookup(indices)
-                    bound_ss = BoundAdvancedStrokeSequence(ss, indices)
+                    for indices in permutations:
+                        simple_translation = translation.lookup(indices)
+                        simple_stroke_sequences = ss.to_simple_stroke_sequences(indices)
 
-                    if translation.is_mixin:
-                        self.add_mixin(
-                            simple_translation,
-                            translation.mixin_side,
-                            translation.change_side,
-                            bound_ss)
+                        if translation.is_mixin:
+                            self.add_mixin(
+                                simple_translation,
+                                translation.mixin_side,
+                                translation.change_side,
+                                simple_stroke_sequences)
 
-                    if translation.is_entry:
-                        if not simple_translation in self.entries:
-                            self.entries[simple_translation] = []
-                        self.entries[simple_translation].append(bound_ss)
+                        if translation.is_entry:
+                            for simple_stroke_sequence in simple_stroke_sequences:
+                                key_str = simple_stroke_sequence.to_string()
 
-    def add_mixin(self, key, side, change_side, entry):
+                                if key_str in self.entries:
+                                    logging.warning("Conflict detected with entry: {\""
+                                        + translation_str + "\": \""
+                                        + ss_str + "\"} and: {\""
+                                        + self.entries[key_str] + "\": \""
+                                        + key_str + "\"}")
+
+                                self.entries[key_str] = simple_translation
+                except(ParseError, LookupError) as e:
+                    logging.warning("Error processing entry: {\""
+                        + translation_str + "\": \""
+                        + ss_str + "\"}")
+                    logging.warning("  " + str(e))
+
+    def add_mixin(self, key, side, change_side, entries):
         if side == 0:
-            self.add_mixin(key, 1, change_side, entry)
-            self.add_mixin(key, 2, change_side, entry)
+            self.add_mixin(key, 1, change_side, entries)
+            self.add_mixin(key, 2, change_side, entries)
             return
 
         key_ = ("-" if side == 2 else "") + double_quote_str(key)
         if key_ in self.mixins:
             mixin = self.mixins[key_]
             if change_side == mixin.change_side:
-                mixin.add(entry)
+                mixin.add(entries)
             else:
                 logging.warning("Mixin " + keys[0] + " definition differs from existing meta data.")
         else:
             mixin = Mixin(change_side)
-            mixin.add(entry)
+            mixin.add(entries)
             self.mixins[key_] = mixin
 
             # Only add simplified mixin key for keys that don't include
@@ -118,7 +119,7 @@ class AdvancedStenoDictionary:
 
     def _add_base_mixin(self, key, side, change_side, simple_stroke_sequences):
         mixin = Mixin(change_side)
-        mixin.simple_stroke_sequences = simple_stroke_sequences
+        mixin.add(simple_stroke_sequences)
 
         simplified_key = key.lower()
         long_key = double_quote_str(key);
@@ -144,27 +145,3 @@ class AdvancedStenoDictionary:
             raise LookupError("Mixin " + key_ + " does not exist.")
 
         return self.mixins[key_]
-
-    def to_simple_dictionary(self):
-        simple_dictionary = {}
-
-        for entry, adv_stroke_sequences in self.entries.items():
-            for adv_ss in adv_stroke_sequences:
-                try:
-                    for simple_ss in adv_ss.to_simple_stroke_sequences():
-                        strokes_string = simple_ss.to_string()
-                        if strokes_string in simple_dictionary:
-                            logging.warning("Conflict detected with entry: {\""
-                                + entry + "\": \""
-                                + adv_ss.stroke_sequence.str_ + "\"} and: {\""
-                                + simple_dictionary[strokes_string] + "\": \""
-                                + strokes_string + "\"}")
-
-                        simple_dictionary[strokes_string] = entry
-                except(ParseError, LookupError, CircularReferenceError) as e:
-                    logging.warning("Error processing entry: {\""
-                        + entry + "\": \""
-                        + adv_ss.stroke_sequence.str_ + "\"}")
-                    logging.warning("  " + str(e))
-
-        return simple_dictionary

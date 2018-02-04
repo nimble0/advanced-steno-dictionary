@@ -16,16 +16,8 @@ class AdvancedStrokeSequencePart:
         self.mixin = dictionary.mixin(name, side)
         self.action = action
 
-    def to_simple_stroke_sequences(self,
-        selection_tree,
-        mixin_recursion_chain = []
-    ):
-        # Mixin contains a circular reference
-        #if mixin in mixin_recursion_chain:
-            #raise CircularReferenceError("Mixin '" + name + "' contains mixins that lead back to itself.")
-
-        return self.mixin.to_simple_stroke_sequences(
-            mixin_recursion_chain)
+    def to_simple_stroke_sequences(self, selection_tree):
+        return self.mixin.simple_stroke_sequences
 
 class AdvancedStrokeSequenceExpandedOptionGroup(OptionGroup):
     def __init__(self, options):
@@ -37,13 +29,8 @@ class AdvancedStrokeSequenceExpandedOptionGroup(OptionGroup):
     def __getitem__(self, i):
         return self.options[i]
 
-    def to_simple_stroke_sequences(self,
-        selection_tree = [],
-        mixin_recursion_chain = []
-    ):
-        return self.options[selection_tree].to_simple_stroke_sequences(
-            selection_tree,
-            mixin_recursion_chain)
+    def to_simple_stroke_sequences(self, selection_tree = []):
+        return self.options[selection_tree].to_simple_stroke_sequences(selection_tree)
 
 class AdvancedStrokeSequenceOptionGroup(BuildableOptionGroup):
     def __init__(self,
@@ -63,7 +50,7 @@ class AdvancedStrokeSequenceOptionGroup(BuildableOptionGroup):
         self.fill_in_options = fill_in_options
 
     def add_option(self):
-        self.options.append(AdvancedStrokeSequence.empty(self.dictionary))
+        self.options.append(AdvancedStrokeSequence(self.dictionary, "", None))
         self.inner_side = self.start_side
         self.inner_action = 0
         self.option_i += 1
@@ -97,10 +84,7 @@ class AdvancedStrokeSequenceOptionGroup(BuildableOptionGroup):
         self.options = [fill_in_option(i)
             for i in range(0, len(self.fill_in_options))]
 
-    def to_simple_stroke_sequences(self,
-        selection_tree,
-        mixin_recursion_chain = []
-    ):
+    def to_simple_stroke_sequences(self, selection_tree):
         selection_indices = None
         if len(selection_tree) > 0:
             selection_indices = selection_tree[self.bound_index]
@@ -111,8 +95,7 @@ class AdvancedStrokeSequenceOptionGroup(BuildableOptionGroup):
 
         return self.options[selection_indices[0]] \
             .to_simple_stroke_sequences(
-                selection_indices[1],
-                mixin_recursion_chain)
+                selection_indices[1])
 
 class AdvancedStrokeSequenceOptionGroupStack(OptionGroupStack):
     def __init__(self, dictionary, fill_in_options):
@@ -138,9 +121,6 @@ class AdvancedStrokeSequenceOptionGroupStack(OptionGroupStack):
 class ParseError(Exception):
     pass
 
-class CircularReferenceError(Exception):
-    pass
-
 class AdvancedStrokeSequence(PartsList):
     base_pattern = r"""
         \s+                                               # Whitespace (ignored outside of quotes)
@@ -156,26 +136,8 @@ class AdvancedStrokeSequence(PartsList):
         self.str_ = advanced_ss_str
         self.fill_in_options = fill_in_options
 
-        self.parts = None
-
-        self.is_parsed = False
-
-    def __len__(self):
-        return len(self.parts)
-
-    def __getitem__(self, i):
-        return self.parts[i]
-
-    def empty(dictionary):
-        empty_ss = AdvancedStrokeSequence(dictionary, "", None)
-        empty_ss.parts = []
-        return empty_ss
-
-    def add_part(self, part):
-        self.parts.append(part)
-
-    def parse(self, mixin_recursion_chain = []):
-        if not self.parts is None:
+        if self.str_ == "":
+            self.parts = []
             return
 
         part_strs = self.dictionary.advanced_ss_pattern.findall(self.str_)
@@ -227,38 +189,23 @@ class AdvancedStrokeSequence(PartsList):
 
         self.parts = option_group_stack.root().parts
 
-    def to_simple_stroke_sequences(self,
-        selection_tree = [],
-        mixin_recursion_chain = []
-    ):
-        if not self.is_parsed:
-            self.parse(mixin_recursion_chain)
-            self.is_parsed = True
+    def __len__(self):
+        return len(self.parts)
 
+    def __getitem__(self, i):
+        return self.parts[i]
+
+    def add_part(self, part):
+        self.parts.append(part)
+
+    def to_simple_stroke_sequences(self, selection_tree = []):
         simple_stroke_sequences = [StrokeSequence(
             [Stroke(self.dictionary.key_layout)])]
 
         for part in self.parts:
             simple_stroke_sequences = [ss_a.copy().combine(ss_b, part.action)
                 for ss_b in part.to_simple_stroke_sequences(
-                    selection_tree,
-                    mixin_recursion_chain)
+                    selection_tree)
                 for ss_a in simple_stroke_sequences]
 
         return simple_stroke_sequences
-
-class BoundAdvancedStrokeSequence:
-    def __init__(self, stroke_sequence, selection_tree):
-        self.stroke_sequence = stroke_sequence
-        self.selection_tree = selection_tree
-
-        self.simple_stroke_sequences = None
-
-    def to_simple_stroke_sequences(self, mixin_recursion_chain = []):
-        if self.simple_stroke_sequences is None:
-            self.simple_stroke_sequences = \
-                self.stroke_sequence.to_simple_stroke_sequences(
-                    self.selection_tree,
-                    mixin_recursion_chain)
-
-        return self.simple_stroke_sequences

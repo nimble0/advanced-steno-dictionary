@@ -12,26 +12,7 @@ class AdvancedTranslation(PartsList):
 
     def __init__(self, translation_str):
         self.str_ = translation_str
-        self.parts = None
 
-        if not self.str_ == "":
-            self.parse()
-
-    def __len__(self):
-        return len(self.parts)
-
-    def __getitem__(self, i):
-        return self.parts[i]
-
-    def empty():
-        empty_translation = AdvancedTranslation("")
-        empty_translation.parts = []
-        return empty_translation
-
-    def add_part(self, part):
-        self.parts.append(part)
-
-    def parse(self):
         meta_entry = ""
         meta_divider = self.str_.rfind("|")
         translation = self.str_
@@ -48,10 +29,14 @@ class AdvancedTranslation(PartsList):
         self.mixin_side = (meta_entry.find("l") != -1) | ((meta_entry.find("r") != -1)<<1)
         self.change_side = (meta_entry.find("L") != -1) | ((meta_entry.find("R") != -1)<<1)
 
+        if translation == "":
+            self.parts = []
+            return
+
         part_strs = AdvancedTranslation.translation_pattern.findall(translation)
 
         option_group_stack = OptionGroupStack(
-            BuildableOptionGroup(AdvancedTranslation.empty()))
+            BuildableOptionGroup(AdvancedTranslation("")))
         for part_str in part_strs:
             if part_str == "[":
                 option_group_stack.begin_group()
@@ -63,6 +48,15 @@ class AdvancedTranslation(PartsList):
                 option_group_stack.add_part(part_str)
 
         self.parts = option_group_stack.root().parts
+
+    def __len__(self):
+        return len(self.parts)
+
+    def __getitem__(self, i):
+        return self.parts[i]
+
+    def add_part(self, part):
+        self.parts.append(part)
 
     def lookup(self, choice_tree):
         value = ""

@@ -24,14 +24,12 @@ with open(sys.argv[1]) as data_file:
 dictionary = AdvancedStenoDictionary(layout)
 dictionary.add_entries(entries)
 
-simple_dictionary = dictionary.to_simple_dictionary()
-
 if len(sys.argv) >= 3:
     with open(sys.argv[2], 'w') as out_file:
-        json.dump(simple_dictionary, out_file,
+        json.dump(dictionary.entries, out_file,
                   ensure_ascii = False, sort_keys = True,
                   indent = 0, separators = (',', ': '))
 else:
-    print(json.dumps(simple_dictionary,
+    print(json.dumps(dictionary.entries,
                      ensure_ascii = False, sort_keys = True,
                      indent = 0, separators = (',', ': ')))
