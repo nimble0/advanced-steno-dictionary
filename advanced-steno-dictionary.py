@@ -5,7 +5,6 @@ try:
     import simplejson as json
 except ImportError:
     import json
-import collections
 
 from stroke import KeyLayout
 from advanced_steno_dictionary import AdvancedStenoDictionary
@@ -19,7 +18,7 @@ layout.keys = "STKPWHRAO*EUFRPBLGTSDZ"
 layout.break_keys = (7, 12)
 
 with open(sys.argv[1]) as data_file:
-    entries = json.load(data_file, object_pairs_hook=collections.OrderedDict)
+    entries = json.load(data_file, object_pairs_hook=tuple)
 
 dictionary = AdvancedStenoDictionary(layout)
 dictionary.add_entries(entries)

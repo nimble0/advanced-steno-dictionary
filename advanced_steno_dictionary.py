@@ -1,6 +1,5 @@
 import re
 import logging
-import collections
 
 from advanced_translation import AdvancedTranslation
 from stroke import Stroke, StrokeSequence
@@ -50,10 +49,10 @@ class AdvancedStenoDictionary:
                 + r"| [" + re.escape("".join(self.key_layout.keys)) + "]"
             , re.VERBOSE)
 
-        self.entries = collections.OrderedDict()
+        self.entries = {}
 
     def add_entries(self, entries):
-        for translation_str, ss_strs in entries.items():
+        for translation_str, ss_strs in entries:
             translation = AdvancedTranslation(translation_str)
 
             permutations = permutate_tree_indices(translation)
